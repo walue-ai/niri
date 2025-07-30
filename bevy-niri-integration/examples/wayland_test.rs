@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             println!("❌ Failed to connect to Wayland compositor: {:?}", e);
-            return Err(e);
+            return Err(Box::new(e));
         }
     }
     
