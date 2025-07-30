@@ -39,7 +39,22 @@ impl BevyRenderer {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let mut app = App::new();
         
-        app.add_plugins(DefaultPlugins.build().disable::<WindowPlugin>());
+        app.add_plugins((
+            bevy::core::TaskPoolPlugin::default(),
+            bevy::core::TypeRegistrationPlugin,
+            bevy::core::FrameCountPlugin,
+            bevy::time::TimePlugin,
+            bevy::transform::TransformPlugin,
+            bevy::hierarchy::HierarchyPlugin,
+            bevy::diagnostic::DiagnosticsPlugin,
+            bevy::asset::AssetPlugin::default(),
+            bevy::scene::ScenePlugin,
+            bevy::render::RenderPlugin::default(),
+            bevy::render::texture::ImagePlugin::default(),
+            bevy::pbr::PbrPlugin::default(),
+            bevy::ui::UiPlugin,
+            bevy::text::TextPlugin,
+        ));
         
         app.add_systems(Startup, setup_demo_scene);
         app.add_systems(Update, (rotate_cube, update_demo_text));
