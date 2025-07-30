@@ -50,8 +50,8 @@ impl BevyRenderer {
             bevy::asset::AssetPlugin::default(),
         ));
         
-        app.add_systems(Startup, setup_demo_scene);
-        app.add_systems(Update, (rotate_cube, update_demo_text));
+        // app.add_systems(Startup, setup_demo_scene);
+        // app.add_systems(Update, (rotate_cube, update_demo_text));
         app.insert_resource(BevyExampleTimer(Timer::from_seconds(1.0, TimerMode::Repeating)));
         
         let images = Assets::<Image>::default();
