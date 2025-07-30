@@ -12,6 +12,12 @@ use crate::render_helpers::texture::TextureBuffer;
 use crate::render_helpers::renderer::{NiriRenderer, BevyCompatibleRenderer};
 use super::texture_manager::BevyTextureConverter;
 
+#[derive(Component)]
+struct RotatingCube;
+
+#[derive(Resource)]
+struct BevyExampleTimer(Timer);
+
 pub struct BevyRenderer {
     app: App,
     texture_converter: BevyTextureConverter,
@@ -30,7 +36,19 @@ impl BevyRenderer {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let mut app = App::new();
         
-        app.add_plugins(MinimalPlugins);
+        app.add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Niri-Bevy Integration Demo".into(),
+                resolution: (800.0, 600.0).into(),
+                present_mode: bevy::window::PresentMode::AutoVsync,
+                ..default()
+            }),
+            ..default()
+        }));
+        
+        app.add_systems(Startup, setup_demo_scene);
+        app.add_systems(Update, (rotate_cube, update_demo_text));
+        app.insert_resource(BevyExampleTimer(Timer::from_seconds(1.0, TimerMode::Repeating)));
         
         let images = Assets::<Image>::default();
         
@@ -99,6 +117,84 @@ impl BevyRenderer {
 
     pub fn get_output_texture(&self, output: &Output) -> Option<&BevyTexture> {
         self.texture_converter.get_texture(output)
+    }
+}
+
+fn setup_demo_scene(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    commands.spawn(Camera3dBundle {
+        transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
+    });
+
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
+            material: materials.add(Color::srgb_u8(124, 144, 255)),
+            transform: Transform::from_xyz(0.0, 0.5, 0.0),
+            ..default()
+        },
+        RotatingCube,
+    ));
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Plane3d::default().mesh().size(5.0, 5.0)),
+        material: materials.add(Color::srgb_u8(63, 124, 9)),
+        ..default()
+    });
+
+    commands.spawn(PointLightBundle {
+        point_light: PointLight {
+            shadows_enabled: true,
+            ..default()
+        },
+        transform: Transform::from_xyz(4.0, 8.0, 4.0),
+        ..default()
+    });
+
+    commands.spawn(
+        TextBundle::from_section(
+            "Niri-Bevy Integration Demo\nWayland Client Testing\nBevy renderer active!",
+            TextStyle {
+                font_size: 30.0,
+                color: Color::WHITE,
+                ..default()
+            },
+        )
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(10.0),
+            left: Val::Px(10.0),
+            ..default()
+        }),
+    );
+}
+
+fn rotate_cube(mut query: Query<&mut Transform, With<RotatingCube>>, time: Res<Time>) {
+    for mut transform in &mut query {
+        transform.rotate_y(time.delta_seconds() * 0.5);
+        transform.rotate_x(time.delta_seconds() * 0.3);
+    }
+}
+
+fn update_demo_text(
+    mut timer: ResMut<BevyExampleTimer>,
+    time: Res<Time>,
+    mut query: Query<&mut Text>,
+) {
+    if timer.0.tick(time.delta()).just_finished() {
+        for mut text in &mut query {
+            if let Some(section) = text.sections.first_mut() {
+                let elapsed = time.elapsed_seconds() as u32;
+                section.value = format!(
+                    "Niri-Bevy Integration Demo\nWayland Client Testing\nBevy renderer active!\nRuntime: {}s",
+                    elapsed
+                );
+            }
+        }
     }
 }
 
