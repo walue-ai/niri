@@ -1,5 +1,5 @@
 [workspace]
-members = [
+members = ["bevy-niri-integration",
     "niri-config",
     "niri-ipc",
     "niri-visual-tests",
