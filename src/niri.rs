@@ -113,6 +113,7 @@ use smithay::wayland::xdg_foreign::XdgForeignState;
 use crate::animation::Clock;
 use crate::backend::tty::SurfaceDmabufFeedback;
 use crate::backend::{Backend, Headless, RenderResult, Tty, Winit};
+use crate::bevy_integration::{BevyRenderer, BevyTexture};
 use crate::cursor::{CursorManager, CursorTextureCache, RenderCursor, XCursor};
 #[cfg(feature = "dbus")]
 use crate::dbus::freedesktop_locale1::Locale1ToNiri;
@@ -267,6 +268,8 @@ pub struct Niri {
     pub foreign_toplevel_state: ForeignToplevelManagerState,
     pub ext_workspace_state: ExtWorkspaceManagerState,
     pub screencopy_state: ScreencopyManagerState,
+    pub bevy_renderer: Option<BevyRenderer>,
+    pub bevy_texture_cache: HashMap<Output, BevyTexture>,
     pub output_management_state: OutputManagementManagerState,
     pub viewporter_state: ViewporterState,
     pub xdg_foreign_state: XdgForeignState,
@@ -695,6 +698,9 @@ impl State {
         // it's good to advance every now and then so the workspace clean-up and animations don't
         // build up (the 1 second frame callback timer will call this line).
         self.niri.advance_animations();
+
+        // Update Bevy textures from niri render results
+        self.niri.update_bevy_textures(&mut self.backend);
 
         self.niri.redraw_queued_outputs(&mut self.backend);
 
@@ -2382,6 +2388,24 @@ impl Niri {
         output_management_state.on_config_changed(config_.outputs.clone());
         let screencopy_state =
             ScreencopyManagerState::new::<State, _>(&display_handle, client_is_unrestricted);
+
+        let bevy_renderer = match BevyRenderer::new() {
+            Ok(mut renderer) => {
+                if let Err(err) = renderer.initialize() {
+                    warn!("Failed to initialize Bevy renderer: {}", err);
+                    None
+                } else {
+                    info!("Bevy renderer initialized successfully");
+                    Some(renderer)
+                }
+            }
+            Err(err) => {
+                warn!("Failed to create Bevy renderer: {}", err);
+                None
+            }
+        };
+
+        let bevy_texture_cache = HashMap::new();
         let viewporter_state = ViewporterState::new::<State>(&display_handle);
         let xdg_foreign_state = XdgForeignState::new::<State>(&display_handle);
 
@@ -2575,6 +2599,8 @@ impl Niri {
             ext_workspace_state,
             output_management_state,
             screencopy_state,
+            bevy_renderer,
+            bevy_texture_cache,
             viewporter_state,
             xdg_foreign_state,
             text_input_state,
@@ -2957,6 +2983,11 @@ impl Niri {
         self.stop_casts_for_target(CastTarget::Output(output.downgrade()));
 
         self.remove_screencopy_output(output);
+
+        if let Some(bevy_renderer) = &mut self.bevy_renderer {
+            bevy_renderer.handle_output_removed(output);
+        }
+        self.bevy_texture_cache.remove(output);
 
         // Disable the output global and remove some time later to give the clients some time to
         // process it.
@@ -6241,6 +6272,45 @@ impl Niri {
         self.idle_notifier_state.notify_activity(&self.seat);
 
         self.notified_activity_this_iteration = true;
+    }
+
+    pub fn update_bevy_textures(&mut self, backend: &mut crate::backend::Backend) {
+        let _span = tracy_client::span!("Niri::update_bevy_textures");
+
+        if self.bevy_renderer.is_none() {
+            return;
+        }
+
+        // Collect outputs first to avoid borrowing conflicts
+        let outputs: Vec<_> = self.sorted_outputs.clone();
+        
+        for output in &outputs {
+            if let Some(texture_data) = self.get_output_texture_buffer(output, backend) {
+                if let Some(bevy_renderer) = &mut self.bevy_renderer {
+                    match bevy_renderer.update_from_niri_texture(output, backend, &texture_data) {
+                        Ok(bevy_texture) => {
+                            self.bevy_texture_cache.insert(output.clone(), bevy_texture);
+                        }
+                        Err(err) => {
+                            warn!("Failed to update Bevy texture for output {:?}: {}", output, err);
+                        }
+                    }
+                }
+            }
+        }
+        
+        if let Some(bevy_renderer) = &mut self.bevy_renderer {
+            bevy_renderer.update();
+        }
+    }
+
+    fn get_output_texture_buffer(&self, output: &Output, backend: &mut crate::backend::Backend) -> Option<Vec<u8>> {
+        let output_state = self.output_state.get(output)?;
+        let size = output_size(output);
+        
+        // Create a simple black texture buffer for now
+        let buffer_size = (size.w as u32 * size.h as u32 * 4) as usize;
+        Some(vec![0u8; buffer_size])
     }
 }
 
