@@ -5,6 +5,9 @@ use bevy::asset::{Assets, Handle};
 use bevy::render::texture::Image;
 use wgpu::TextureFormat;
 use bevy::render::render_resource::{Extent3d, TextureDimension};
+use bevy::pbr::{StandardMaterial, PbrBundle, PointLight, PointLightBundle};
+use bevy::ui::{Style, PositionType, Val, TextBundle, TextStyle};
+use bevy::text::Text;
 use smithay::output::Output;
 use smithay::backend::renderer::{ExportMem, Texture};
 
@@ -36,15 +39,7 @@ impl BevyRenderer {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let mut app = App::new();
         
-        app.add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Niri-Bevy Integration Demo".into(),
-                resolution: (800.0, 600.0).into(),
-                present_mode: bevy::window::PresentMode::AutoVsync,
-                ..default()
-            }),
-            ..default()
-        }));
+        app.add_plugins(DefaultPlugins.build().disable::<WindowPlugin>());
         
         app.add_systems(Startup, setup_demo_scene);
         app.add_systems(Update, (rotate_cube, update_demo_text));
