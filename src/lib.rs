@@ -3,6 +3,7 @@ extern crate tracing;
 
 pub mod animation;
 pub mod backend;
+pub mod bevy_integration;
 pub mod cli;
 pub mod cursor;
 #[cfg(feature = "dbus")]

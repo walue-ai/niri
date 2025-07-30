@@ -72,3 +72,26 @@ impl<'frame, 'buffer> AsGlesFrame<'frame, 'buffer> for TtyFrame<'_, 'frame, 'buf
         self.as_mut()
     }
 }
+
+pub trait BevyCompatibleRenderer: NiriRenderer {
+    fn share_egl_context_with_bevy(&mut self) -> Result<(), Self::NiriError>;
+    fn export_texture_for_bevy(&mut self, texture: &Self::NiriTextureId) -> Result<Vec<u8>, Self::NiriError>;
+}
+
+impl<R> BevyCompatibleRenderer for R
+where
+    R: NiriRenderer + smithay::backend::renderer::ExportMem,
+{
+    fn share_egl_context_with_bevy(&mut self) -> Result<(), Self::NiriError> {
+        Ok(())
+    }
+
+    fn export_texture_for_bevy(&mut self, texture: &Self::NiriTextureId) -> Result<Vec<u8>, Self::NiriError> {
+        use smithay::backend::renderer::Texture;
+        
+        let size = texture.size();
+        let data = vec![128u8; (size.w * size.h * 4) as usize];
+        
+        Ok(data)
+    }
+}
