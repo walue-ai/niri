@@ -82,20 +82,15 @@ impl NiriScreencopyClient {
         let output_globals = globals.contents().with_list(|list| {
             list.iter()
                 .filter(|global| global.interface == "wl_output")
-                .map(|global| global.name)
+                .map(|global| (global.name, global.version))
                 .collect::<Vec<_>>()
         });
         
-        let mut outputs = Vec::new();
-        for name in output_globals {
-            let output: wl_output::WlOutput = globals.registry().bind::<wl_output::WlOutput, (), AppData>(name, 1, &event_queue.handle(), ());
-            outputs.push(output);
-        }
-        
-        for (i, output) in outputs.into_iter().enumerate() {
+        for (name, version) in output_globals {
+            let output: wl_output::WlOutput = globals.registry().bind::<wl_output::WlOutput, (), AppData>(name, version.min(4), &event_queue.handle(), ());
             let output_info = OutputInfo {
-                name: format!("output-{}", i),
-                width: 1920,
+                name: format!("wl_output-{}", name),
+                width: 1920,  // Will be updated by geometry/mode events
                 height: 1080,
                 refresh_rate: 60,
                 scale: 1.0,
@@ -153,12 +148,22 @@ impl NiriScreencopyClient {
     }
     
     pub fn poll_events(&mut self) -> Result<(), CaptureError> {
-        self.event_queue.blocking_dispatch(&mut AppData {
+        let mut app_data = AppData {
             outputs: self.outputs.clone(),
             screencopy_manager: self.screencopy_manager.clone(),
             shm: self.shm.clone(),
-        }).map_err(|e| CaptureError::Protocol(e.to_string()))?;
+        };
         
+        self.event_queue.blocking_dispatch(&mut app_data)
+            .map_err(|e| CaptureError::Protocol(e.to_string()))?;
+        
+        self.outputs = app_data.outputs;
+        
+        Ok(())
+    }
+    
+    pub fn refresh_outputs(&mut self) -> Result<(), CaptureError> {
+        self.poll_events()?;
         Ok(())
     }
 }
@@ -177,13 +182,47 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for AppData {
 
 impl Dispatch<wl_output::WlOutput, ()> for AppData {
     fn event(
-        _state: &mut Self,
-        _proxy: &wl_output::WlOutput,
-        _event: wl_output::Event,
+        state: &mut Self,
+        proxy: &wl_output::WlOutput,
+        event: wl_output::Event,
         _data: &(),
         _conn: &Connection,
         _qhandle: &QueueHandle<AppData>,
     ) {
+        match event {
+            wl_output::Event::Geometry { 
+                x: _, y: _, physical_width: _, physical_height: _, 
+                subpixel: _, make, model, transform: _ 
+            } => {
+                for (name, (output, info)) in state.outputs.iter_mut() {
+                    if output == proxy {
+                        info.name = format!("{}-{}", make, model);
+                        break;
+                    }
+                }
+            }
+            wl_output::Event::Mode { flags: _, width, height, refresh } => {
+                for (_name, (output, info)) in state.outputs.iter_mut() {
+                    if output == proxy {
+                        info.width = width as u32;
+                        info.height = height as u32;
+                        info.refresh_rate = (refresh / 1000) as u32; // Convert mHz to Hz
+                        break;
+                    }
+                }
+            }
+            wl_output::Event::Scale { factor } => {
+                for (_name, (output, info)) in state.outputs.iter_mut() {
+                    if output == proxy {
+                        info.scale = factor as f64;
+                        break;
+                    }
+                }
+            }
+            wl_output::Event::Done => {
+            }
+            _ => {}
+        }
     }
 }
 

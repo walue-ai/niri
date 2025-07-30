@@ -12,6 +12,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(mut client) => {
             println!("✅ Successfully connected to Wayland compositor");
             
+            if let Err(e) = client.refresh_outputs() {
+                println!("⚠️  Warning: Failed to refresh outputs: {:?}", e);
+            }
+            
             let outputs = client.get_outputs();
             println!("📺 Found {} output(s):", outputs.len());
             
