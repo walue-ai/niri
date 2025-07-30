@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use bevy::prelude::*;
-use wgpu_types::{Extent3d, TextureUsages, TextureFormat, TextureDimension};
+use bevy::render::render_resource::{Extent3d, TextureUsages, TextureFormat, TextureDimension};
 use crate::wayland_client::CaptureBuffer;
 use crate::error::ConversionError;
 

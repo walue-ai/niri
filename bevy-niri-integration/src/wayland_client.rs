@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use wayland_client::{Connection, Dispatch, QueueHandle, EventQueue};
+use wayland_client::{Connection, Dispatch, QueueHandle, EventQueue, globals::{GlobalList, GlobalListContents}};
 use wayland_protocols_wlr::screencopy::v1::client::{
     zwlr_screencopy_frame_v1, zwlr_screencopy_manager_v1,
 };
@@ -73,14 +73,24 @@ impl NiriScreencopyClient {
             shm: None,
         };
         
-        app_data.screencopy_manager = globals.bind(&event_queue.handle(), 1..=3, ())
-            .map_err(|e| CaptureError::Protocol(e.to_string()))?;
+        app_data.screencopy_manager = Some(globals.bind(&event_queue.handle(), 1..=3, ())
+            .map_err(|e| CaptureError::Protocol(e.to_string()))?);
         
-        app_data.shm = globals.bind(&event_queue.handle(), 1..=1, ())
-            .map_err(|e| CaptureError::Protocol(e.to_string()))?;
+        app_data.shm = Some(globals.bind(&event_queue.handle(), 1..=1, ())
+            .map_err(|e| CaptureError::Protocol(e.to_string()))?);
         
-        let outputs: Vec<wl_output::WlOutput> = globals.bind_all(&event_queue.handle(), 1..=4, ())
-            .map_err(|e| CaptureError::Protocol(e.to_string()))?;
+        let output_globals = globals.contents().with_list(|list| {
+            list.iter()
+                .filter(|global| global.interface == "wl_output")
+                .map(|global| global.name)
+                .collect::<Vec<_>>()
+        });
+        
+        let mut outputs = Vec::new();
+        for name in output_globals {
+            let output: wl_output::WlOutput = globals.registry().bind::<wl_output::WlOutput, (), AppData>(name, 1, &event_queue.handle(), ());
+            outputs.push(output);
+        }
         
         for (i, output) in outputs.into_iter().enumerate() {
             let output_info = OutputInfo {
@@ -116,7 +126,7 @@ impl NiriScreencopyClient {
         
         let frame = screencopy_manager.capture_output(0, output, &self.event_queue.handle(), ());
         
-        let mut capture_state = CaptureState {
+        let capture_state = CaptureState {
             frame: Some(frame),
             buffer: None,
             ready: false,
@@ -153,12 +163,12 @@ impl NiriScreencopyClient {
     }
 }
 
-impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
+impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for AppData {
     fn event(
         _state: &mut Self,
         _proxy: &wl_registry::WlRegistry,
         _event: wl_registry::Event,
-        _data: &(),
+        _data: &GlobalListContents,
         _conn: &Connection,
         _qhandle: &QueueHandle<AppData>,
     ) {

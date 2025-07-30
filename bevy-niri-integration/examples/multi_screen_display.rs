@@ -41,31 +41,35 @@ fn setup_camera_system(mut commands: Commands) {
 
 fn setup_ui_system(mut commands: Commands) {
     commands.spawn((
-        Text::new("Niri Multi-Screen Display\nPress SPACE to scale, R to reset, ESC to exit"),
-        Node {
+        Text::from_section(
+            "Niri Multi-Screen Display\nPress SPACE to scale, R to reset, ESC to exit",
+            TextStyle {
+                font_size: 16.0,
+                color: Color::WHITE,
+                ..default()
+            }
+        ),
+        Style {
             position_type: PositionType::Absolute,
             top: Val::Px(10.0),
             left: Val::Px(10.0),
             ..default()
         },
-        TextColor(Color::WHITE),
-        TextFont {
-            font_size: 16.0,
-            ..default()
-        },
     ));
     
     commands.spawn((
-        Text::new("Performance: Initializing..."),
-        Node {
+        Text::from_section(
+            "Performance: Initializing...",
+            TextStyle {
+                font_size: 14.0,
+                color: Color::srgb(1.0, 1.0, 0.0),
+                ..default()
+            }
+        ),
+        Style {
             position_type: PositionType::Absolute,
             bottom: Val::Px(10.0),
             left: Val::Px(10.0),
-            ..default()
-        },
-        TextColor(Color::YELLOW),
-        TextFont {
-            font_size: 14.0,
             ..default()
         },
         PerformanceDisplay,
@@ -91,10 +95,10 @@ fn update_performance_display(
     time: Res<Time>,
 ) {
     for mut text in query.iter_mut() {
-        let fps = 1.0 / time.delta_secs();
+        let fps = 1.0 / time.delta_seconds();
         let stats = &capture_state.performance_stats;
         
-        **text = format!(
+        text.sections[0].value = format!(
             "Performance: {:.1} FPS | Captured: {} | Dropped: {} | Latency: {:.1}ms",
             fps,
             stats.frames_captured,

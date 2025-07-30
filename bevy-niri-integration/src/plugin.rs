@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 use bevy::prelude::*;
-use bevy::render::camera::RenderTarget;
-use bevy::render::view::RenderLayers;
-use wgpu_types::{Extent3d, TextureUsages};
-use crate::wayland_client::{NiriScreencopyClient, OutputInfo, CaptureBuffer};
-use crate::error::CaptureError;
+use bevy::render::render_resource::{Extent3d, TextureUsages};
+use crate::wayland_client::NiriScreencopyClient;
 
 #[derive(Debug, Clone)]
 pub struct NiriCapturePlugin {
@@ -90,7 +87,7 @@ fn setup_niri_capture_system(
                     depth_or_array_layers: 1,
                 };
                 let mut image = Image {
-                    data: Some(vec![0; (size.width * size.height * 4) as usize]),
+                    data: vec![0; (size.width * size.height * 4) as usize],
                     ..default()
                 };
                 image.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_DST;
@@ -111,23 +108,25 @@ fn capture_screens_system(
     time: Res<Time>,
     mut capture_state: ResMut<NiriCaptureState>,
 ) {
-    let current_time = time.elapsed_secs_f64();
+    let current_time = time.elapsed_seconds_f64();
     
     if current_time - capture_state.last_capture_time < capture_state.target_frame_time {
         return;
     }
     
+    let outputs: Vec<String> = capture_state.output_textures.keys().cloned().collect();
+    let mut frames_captured = 0;
+    let mut frames_dropped = 0;
+    
     if let Some(ref mut client) = capture_state.client {
-        let outputs: Vec<String> = capture_state.output_textures.keys().cloned().collect();
-        
         for output_name in outputs {
             match client.capture_output(&output_name) {
-                Ok(buffer) => {
-                    capture_state.performance_stats.frames_captured += 1;
+                Ok(_buffer) => {
+                    frames_captured += 1;
                     trace!("Captured frame for output: {}", output_name);
                 }
                 Err(e) => {
-                    capture_state.performance_stats.frames_dropped += 1;
+                    frames_dropped += 1;
                     warn!("Failed to capture output {}: {:?}", output_name, e);
                 }
             }
@@ -138,6 +137,8 @@ fn capture_screens_system(
         }
     }
     
+    capture_state.performance_stats.frames_captured += frames_captured;
+    capture_state.performance_stats.frames_dropped += frames_dropped;
     capture_state.last_capture_time = current_time;
 }
 
@@ -145,20 +146,19 @@ fn update_textures_system(
     mut images: ResMut<Assets<Image>>,
     capture_state: Res<NiriCaptureState>,
 ) {
-    for (output_name, texture_handle) in &capture_state.output_textures {
+    for (_output_name, texture_handle) in &capture_state.output_textures {
         if let Some(image) = images.get_mut(texture_handle) {
-            if let Some(ref data) = image.data {
+            let data = &mut image.data;
                 let pattern = ((capture_state.performance_stats.frames_captured % 255) as u8, 
                               ((capture_state.performance_stats.frames_captured / 2) % 255) as u8,
                               ((capture_state.performance_stats.frames_captured / 4) % 255) as u8);
                 
-                for chunk in data.chunks_mut(4) {
-                    if chunk.len() >= 4 {
-                        chunk[0] = pattern.0; // R
-                        chunk[1] = pattern.1; // G
-                        chunk[2] = pattern.2; // B
-                        chunk[3] = 255;       // A
-                    }
+            for chunk in data.chunks_mut(4) {
+                if chunk.len() >= 4 {
+                    chunk[0] = pattern.0;
+                    chunk[1] = pattern.1;
+                    chunk[2] = pattern.2;
+                    chunk[3] = 255;
                 }
             }
         }
@@ -169,7 +169,7 @@ fn performance_monitoring_system(
     time: Res<Time>,
     mut capture_state: ResMut<NiriCaptureState>,
 ) {
-    let fps = 1.0 / time.delta_secs();
+    let fps = 1.0 / time.delta_seconds();
     
     if fps < 60.0 {
         capture_state.performance_stats.frames_dropped += 1;
@@ -177,7 +177,7 @@ fn performance_monitoring_system(
     }
     
     capture_state.performance_stats.average_latency = 
-        (capture_state.performance_stats.average_latency * 0.9) + (time.delta_secs() * 0.1);
+        (capture_state.performance_stats.average_latency * 0.9) + (time.delta_seconds() * 0.1);
 }
 
 #[cfg(test)]
