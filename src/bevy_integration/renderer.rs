@@ -48,11 +48,6 @@ impl BevyRenderer {
             bevy::hierarchy::HierarchyPlugin,
             bevy::diagnostic::DiagnosticsPlugin,
             bevy::asset::AssetPlugin::default(),
-            bevy::render::RenderPlugin::default(),
-            bevy::render::texture::ImagePlugin::default(),
-            bevy::pbr::PbrPlugin::default(),
-            bevy::ui::UiPlugin,
-            bevy::text::TextPlugin,
         ));
         
         app.add_systems(Startup, setup_demo_scene);
