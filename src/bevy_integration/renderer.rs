@@ -6,8 +6,8 @@ use bevy::render::texture::Image;
 use wgpu::TextureFormat;
 use bevy::render::render_resource::{Extent3d, TextureDimension};
 use bevy::pbr::{StandardMaterial, PbrBundle, PointLight, PointLightBundle};
-use bevy::ui::{Style, PositionType, Val, TextBundle, TextStyle};
-use bevy::text::Text;
+use bevy::ui::{Style, PositionType, Val};
+use bevy::prelude::{TextBundle, TextStyle, Text};
 use smithay::output::Output;
 use smithay::backend::renderer::{ExportMem, Texture};
 
