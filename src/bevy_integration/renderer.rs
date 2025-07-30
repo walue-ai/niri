@@ -48,7 +48,6 @@ impl BevyRenderer {
             bevy::hierarchy::HierarchyPlugin,
             bevy::diagnostic::DiagnosticsPlugin,
             bevy::asset::AssetPlugin::default(),
-            bevy::scene::ScenePlugin,
             bevy::render::RenderPlugin::default(),
             bevy::render::texture::ImagePlugin::default(),
             bevy::pbr::PbrPlugin::default(),
